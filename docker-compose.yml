@@ -1,0 +1,47 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mealmind
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio:latest
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./data/minio:/data
+
+  app:
+    build: .
+    depends_on:
+      - db
+      - minio
+    environment:
+      RUST_LOG: mealmind=debug,axum=info
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8080
+      DATABASE_URL: postgres://postgres:postgres@db:5432/mealmind
+      JWT_SECRET: devsecret
+      JWT_ISSUER: mealmind
+      JWT_AUDIENCE: mealmind-users
+      JWT_TTL_MINUTES: 60
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_BUCKET: mealmind
+      S3_REGION: us-east-1
+      S3_USE_PATH_STYLE: "true"
+    ports:
+      - "8080:8080"
