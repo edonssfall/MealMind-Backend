@@ -6,6 +6,7 @@ pub struct JwtConfig {
     pub issuer: String,
     pub audience: String,
     pub ttl_minutes: i64,
+    pub refresh_ttl_minutes: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -25,6 +26,10 @@ impl AppConfig {
                 .ok()
                 .and_then(|v| v.parse::<i64>().ok())
                 .unwrap_or(60),
+            refresh_ttl_minutes: std::env::var("JWT_REFRESH_TTL_MINUTES")
+                .ok()
+                .and_then(|v| v.parse::<i64>().ok())
+                .unwrap_or(60 * 24 * 14),
         };
         Ok(Self { database_url, jwt })
     }

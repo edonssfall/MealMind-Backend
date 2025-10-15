@@ -1,5 +1,6 @@
 use axum::{extract::State, Json};
 use serde::Serialize;
+use tracing::{instrument, error};
 
 use crate::{auth::jwt::AuthUser, db::{AppState, User}};
 
@@ -9,6 +10,7 @@ pub struct MeResponse {
     pub email: String,
 }
 
+#[instrument(skip(state))]
 pub async fn me_route(
     State(state): State<AppState>,
     AuthUser(user_id): AuthUser,
@@ -19,7 +21,10 @@ pub async fn me_route(
     .bind(user_id)
     .fetch_one(&state.db)
     .await
-    .map_err(|_| (axum::http::StatusCode::UNAUTHORIZED, "User not found".into()))?;
+    .map_err(|e| {
+        error!(error = %e, user_id = %user_id, "user not found");
+        (axum::http::StatusCode::UNAUTHORIZED, "User not found".into())
+    })?;
 
     Ok(Json(MeResponse { id: user.id, email: user.email }))
 }
