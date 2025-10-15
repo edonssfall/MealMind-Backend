@@ -68,12 +68,7 @@ pub async fn register(
         .await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let keys = JwtKeys::from_ref(&state);
-    let token = keys
-        .sign(user.id)
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    Ok(Json(AuthResponse { token, user: PublicUser { id: user.id, email: user.email } }))
+    Ok(Json(AuthResponse { token: String::new(), user: PublicUser { id: user.id, email: user.email } }))
 }
 
 pub async fn login(

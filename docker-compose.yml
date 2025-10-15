@@ -28,20 +28,7 @@ services:
     depends_on:
       - db
       - minio
-    environment:
-      RUST_LOG: mealmind=debug,axum=info
-      APP_HOST: 0.0.0.0
-      APP_PORT: 8080
-      DATABASE_URL: postgres://postgres:postgres@db:5432/mealmind
-      JWT_SECRET: devsecret
-      JWT_ISSUER: mealmind
-      JWT_AUDIENCE: mealmind-users
-      JWT_TTL_MINUTES: 60
-      S3_ENDPOINT: http://minio:9000
-      S3_ACCESS_KEY: minioadmin
-      S3_SECRET_KEY: minioadmin
-      S3_BUCKET: mealmind
-      S3_REGION: us-east-1
-      S3_USE_PATH_STYLE: "true"
+    env_file:
+      - ./.env
     ports:
       - "8080:8080"
