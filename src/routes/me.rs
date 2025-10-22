@@ -28,3 +28,20 @@ pub async fn me_route(
 
     Ok(Json(MeResponse { id: user.id, email: user.email }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_me_response_serialization() {
+        let response = MeResponse {
+            id: uuid::Uuid::new_v4(),
+            email: "test@example.com".to_string(),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("test@example.com"));
+        assert!(json.contains("id"));
+    }
+}
