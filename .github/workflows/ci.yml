@@ -1,0 +1,48 @@
+name: CI • Rust Build & Test (no tags)
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["**"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BIN_NAME: mealmind
+  ARTIFACT_RETENTION_DAYS: 7
+
+jobs:
+  build_test:
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy,rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Lint
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets --all-features --workspace -- -D warnings
+
+      - name: Test
+        run: cargo test --all-features --workspace --locked --quiet
+
+      - name: Build release
+        run: cargo build --release --workspace --locked
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BIN_NAME }}-${{ github.sha }}
+          path: target/release/${{ env.BIN_NAME }}
+          if-no-files-found: error
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
