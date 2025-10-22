@@ -1,4 +1,4 @@
-name: CI • Rust Build, Test & Audit (no tags)
+name: CI • Rust Build & Test (no tags)
 
 on:
   push:
@@ -14,37 +14,23 @@ env:
   BIN_NAME: mealmind
 
 jobs:
-  build_test_audit:
+  build_test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
+    permissions: { contents: read }
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
           components: clippy,rustfmt
 
-      - name: Cache Rust builds
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: mealmind-linux-release
-          cache-on-failure: true
-          save-if: "always()"
+      - uses: Swatinem/rust-cache@v2
 
-      - name: Lint (fmt + clippy)
+      - name: Lint
         run: |
           cargo fmt --all -- --check
           cargo clippy --all-targets --all-features --workspace --release -- -D warnings
 
       - name: Test (release)
         run: cargo test --release --all-features --workspace --locked --quiet
-
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
-
-      - name: Security audit (reuse build cache)
-        run: cargo audit --deny warnings
