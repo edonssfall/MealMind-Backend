@@ -1,12 +1,12 @@
 use std::net::SocketAddr;
 
-use axum::{routing::{get}, Router};
+use axum::{routing::get, Router};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
+mod auth;
 mod config;
 mod db;
 mod routes;
-mod auth;
 
 use crate::routes::{auth::auth_routes, me::me_route};
 
@@ -14,18 +14,20 @@ use crate::routes::{auth::auth_routes, me::me_route};
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
 
-    let env_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "mealmind=debug,axum=info,tower_http=info".to_string());
-    let json_logs = std::env::var("LOG_FORMAT").map(|v| v == "json").unwrap_or(false);
+    let env_filter = std::env::var("RUST_LOG")
+        .unwrap_or_else(|_| "mealmind=debug,axum=info,tower_http=info".to_string());
+    let json_logs = std::env::var("LOG_FORMAT")
+        .map(|v| v == "json")
+        .unwrap_or(false);
 
     if json_logs {
         tracing_subscriber::fmt()
             .with_env_filter(env_filter)
+            .with_target(false)
             .json()
             .init();
     } else {
-        tracing_subscriber::fmt()
-            .with_env_filter(env_filter)
-            .init();
+        tracing_subscriber::fmt().with_env_filter(env_filter).init();
     }
 
     let app_state = db::AppState::init().await?;
@@ -47,15 +49,19 @@ async fn main() -> anyhow::Result<()> {
                     let uri = req.uri().clone();
                     tracing::info_span!("http_request", %method, uri = %uri)
                 })
-                .on_response(|res: &axum::http::Response<_>, _latency: std::time::Duration, span: &tracing::Span| {
-                    let status = res.status();
-                    span.record("status", &tracing::field::display(status));
-                    if status.is_server_error() {
-                        tracing::error!(%status, "response");
-                    } else {
-                        tracing::info!(%status, "response");
-                    }
-                })
+                .on_response(
+                    |res: &axum::http::Response<_>,
+                     _latency: std::time::Duration,
+                     span: &tracing::Span| {
+                        let status = res.status();
+                        span.record("status", &tracing::field::display(status));
+                        if status.is_server_error() {
+                            tracing::error!(%status, "response");
+                        } else {
+                            tracing::info!(%status, "response");
+                        }
+                    },
+                ),
         );
 
     let addr: SocketAddr = format!(

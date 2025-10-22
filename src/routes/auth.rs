@@ -1,10 +1,17 @@
-use axum::{extract::{FromRef, State}, routing::post, Json, Router};
-use serde::{Deserialize, Serialize};
+use axum::{
+    extract::{FromRef, State},
+    routing::post,
+    Json, Router,
+};
 use lazy_static::lazy_static;
 use regex::Regex;
-use tracing::{info, warn, error, instrument};
+use serde::{Deserialize, Serialize};
+use tracing::{error, info, instrument, warn};
 
-use crate::{auth::{jwt::JwtKeys, password}, db::{AppState, User}};
+use crate::{
+    auth::{jwt::JwtKeys, password},
+    db::{AppState, User},
+};
 
 #[derive(Debug, Deserialize)]
 pub struct RegisterRequest {
@@ -64,13 +71,19 @@ pub async fn register(
 
     if payload.password.len() < 8 {
         warn!("password too short");
-        return Err((axum::http::StatusCode::BAD_REQUEST, "Password too short".into()));
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            "Password too short".into(),
+        ));
     }
 
     // Ensure email is not taken
     if let Ok(Some(_)) = User::find_by_email(&state.db, &payload.email).await {
         warn!(email = %payload.email, "email already registered");
-        return Err((axum::http::StatusCode::CONFLICT, "Email already registered".into()));
+        return Err((
+            axum::http::StatusCode::CONFLICT,
+            "Email already registered".into(),
+        ));
     }
 
     let hash = match password::hash_password(&payload.password) {
@@ -106,7 +119,14 @@ pub async fn register(
     };
 
     info!(user_id = %user.id, email = %user.email, "user registered");
-    Ok(Json(AuthResponse { access_token, refresh_token, user: PublicUser { id: user.id, email: user.email } }))
+    Ok(Json(AuthResponse {
+        access_token,
+        refresh_token,
+        user: PublicUser {
+            id: user.id,
+            email: user.email,
+        },
+    }))
 }
 
 #[instrument(skip(state, payload))]
@@ -125,7 +145,10 @@ pub async fn login(
         Ok(Some(u)) => u,
         Ok(None) => {
             warn!(email = %payload.email, "login unknown email");
-            return Err((axum::http::StatusCode::UNAUTHORIZED, "Invalid credentials".to_string()));
+            return Err((
+                axum::http::StatusCode::UNAUTHORIZED,
+                "Invalid credentials".into(),
+            ));
         }
         Err(e) => {
             error!(error = %e, "find_by_email failed");
@@ -143,7 +166,10 @@ pub async fn login(
 
     if !ok {
         warn!(email = %payload.email, user_id = %user.id, "login invalid password");
-        return Err((axum::http::StatusCode::UNAUTHORIZED, "Invalid credentials".into()));
+        return Err((
+            axum::http::StatusCode::UNAUTHORIZED,
+            "Invalid credentials".into(),
+        ));
     }
 
     let keys = JwtKeys::from_ref(&state);
@@ -163,7 +189,14 @@ pub async fn login(
     };
 
     info!(user_id = %user.id, email = %user.email, "user logged in");
-    Ok(Json(AuthResponse { access_token, refresh_token, user: PublicUser { id: user.id, email: user.email } }))
+    Ok(Json(AuthResponse {
+        access_token,
+        refresh_token,
+        user: PublicUser {
+            id: user.id,
+            email: user.email,
+        },
+    }))
 }
 
 #[instrument(skip(state, payload))]
@@ -172,13 +205,16 @@ pub async fn refresh(
     Json(payload): Json<RefreshRequest>,
 ) -> Result<Json<AuthResponse>, (axum::http::StatusCode, String)> {
     let keys = JwtKeys::from_ref(&state);
-    let claims = keys.verify_refresh(&payload.refresh_token)
+    let claims = keys
+        .verify_refresh(&payload.refresh_token)
         .map_err(|e| (axum::http::StatusCode::UNAUTHORIZED, format!("{}", e)))?;
 
     // Issue new pair
-    let access_token = keys.sign_access(claims.sub)
+    let access_token = keys
+        .sign_access(claims.sub)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let refresh_token = keys.sign_refresh(claims.sub)
+    let refresh_token = keys
+        .sign_refresh(claims.sub)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Load public user
@@ -188,7 +224,18 @@ pub async fn refresh(
     .bind(claims.sub)
     .fetch_one(&state.db)
     .await
-    .map_err(|_| (axum::http::StatusCode::UNAUTHORIZED, "User not found".into()))?;
-
-    Ok(Json(AuthResponse { access_token, refresh_token, user: PublicUser { id: user.id, email: user.email } }))
+    .map_err(|_| {
+        (
+            axum::http::StatusCode::UNAUTHORIZED,
+            "User not found".into(),
+        )
+    })?;
+    Ok(Json(AuthResponse {
+        access_token,
+        refresh_token,
+        user: PublicUser {
+            id: user.id,
+            email: user.email,
+        },
+    }))
 }
