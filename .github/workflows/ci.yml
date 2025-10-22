@@ -18,7 +18,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: read
 
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +43,8 @@ jobs:
       - name: Test (release)
         run: cargo test --release --all-features --workspace --locked --quiet
 
-      - name: Security audit (cargo-audit)
-        uses: actions-rs/audit-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Security audit (reuse build cache)
+        run: cargo audit --deny warnings
