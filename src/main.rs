@@ -54,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
                      _latency: std::time::Duration,
                      span: &tracing::Span| {
                         let status = res.status();
-                        span.record("status", &tracing::field::display(status));
+                        span.record("status", tracing::field::display(status));
                         if status.is_server_error() {
                             tracing::error!(%status, "response");
                         } else {

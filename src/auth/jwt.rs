@@ -88,8 +88,8 @@ impl JwtKeys {
 
     pub fn verify(&self, token: &str) -> anyhow::Result<Claims> {
         let mut validation = Validation::default();
-        validation.set_audience(&[self.audience.clone()]);
-        validation.set_issuer(&[self.issuer.clone()]);
+        validation.set_audience(std::slice::from_ref(&self.audience));
+        validation.set_issuer(std::slice::from_ref(&self.issuer));
         let data = decode::<Claims>(token, &self.decoding, &validation)?;
         debug!(user_id = %data.claims.sub, kind = ?data.claims.kind, "jwt verified");
         Ok(data.claims)
