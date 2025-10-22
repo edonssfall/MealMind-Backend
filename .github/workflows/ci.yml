@@ -12,7 +12,6 @@ concurrency:
 
 env:
   BIN_NAME: mealmind
-  ARTIFACT_RETENTION_DAYS: 7
 
 jobs:
   build_test:
@@ -31,18 +30,7 @@ jobs:
       - name: Lint
         run: |
           cargo fmt --all -- --check
-          cargo clippy --all-targets --all-features --workspace -- -D warnings
+          cargo clippy --all-targets --all-features --workspace --release -- -D warnings
 
-      - name: Test
-        run: cargo test --all-features --workspace --locked --quiet
-
-      - name: Build release
-        run: cargo build --release --workspace --locked
-
-      - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.BIN_NAME }}-${{ github.sha }}
-          path: target/release/${{ env.BIN_NAME }}
-          if-no-files-found: error
-          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+      - name: Test (release)
+        run: cargo test --release --all-features --workspace --locked --quiet

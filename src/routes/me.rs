@@ -1,8 +1,11 @@
 use axum::{extract::State, Json};
 use serde::Serialize;
-use tracing::{instrument, error};
+use tracing::{error, instrument};
 
-use crate::{auth::jwt::AuthUser, db::{AppState, User}};
+use crate::{
+    auth::jwt::AuthUser,
+    db::{AppState, User},
+};
 
 #[derive(Debug, Serialize)]
 pub struct MeResponse {
@@ -23,8 +26,31 @@ pub async fn me_route(
     .await
     .map_err(|e| {
         error!(error = %e, user_id = %user_id, "user not found");
-        (axum::http::StatusCode::UNAUTHORIZED, "User not found".into())
+        (
+            axum::http::StatusCode::UNAUTHORIZED,
+            "User not found".into(),
+        )
     })?;
 
-    Ok(Json(MeResponse { id: user.id, email: user.email }))
+    Ok(Json(MeResponse {
+        id: user.id,
+        email: user.email,
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_me_response_serialization() {
+        let response = MeResponse {
+            id: uuid::Uuid::new_v4(),
+            email: "test@example.com".to_string(),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("test@example.com"));
+        assert!(json.contains("id"));
+    }
 }
