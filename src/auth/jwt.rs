@@ -104,6 +104,80 @@ impl JwtKeys {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{AppConfig, JwtConfig};
+    use sqlx::postgres::PgPoolOptions;
+    use std::sync::Arc;
+
+    fn make_state_with_jwt(secret: &str, issuer: &str, audience: &str) -> AppState {
+        // Use a lazily connecting pool to avoid touching a real DB during unit tests
+        let db = PgPoolOptions::new()
+            .connect_lazy("postgres://postgres:postgres@localhost:5432/postgres")
+            .expect("lazy pool should construct");
+        let config = Arc::new(AppConfig {
+            database_url: "postgres://postgres:postgres@localhost:5432/postgres".into(),
+            jwt: JwtConfig {
+                secret: secret.into(),
+                issuer: issuer.into(),
+                audience: audience.into(),
+                ttl_minutes: 5,
+                refresh_ttl_minutes: 60,
+            },
+        });
+        AppState { db, config }
+    }
+
+    fn make_keys(secret: &str, issuer: &str, audience: &str) -> JwtKeys {
+        let state = make_state_with_jwt(secret, issuer, audience);
+        JwtKeys::from_ref(&state)
+    }
+
+    #[tokio::test]
+    async fn sign_and_verify_access_token() {
+        let keys = make_keys("dev-secret", "test-issuer", "test-aud");
+        let user_id = Uuid::new_v4();
+        let token = keys.sign_access(user_id).expect("sign access");
+        let claims = keys.verify(&token).expect("verify token");
+        assert_eq!(claims.sub, user_id);
+        assert_eq!(claims.iss, "test-issuer");
+        assert_eq!(claims.aud, "test-aud");
+        assert_eq!(claims.kind, TokenKind::Access);
+    }
+
+    #[tokio::test]
+    async fn sign_and_verify_refresh_token_and_verify_refresh() {
+        let keys = make_keys("dev-secret", "iss", "aud");
+        let user_id = Uuid::new_v4();
+        let token = keys.sign_refresh(user_id).expect("sign refresh");
+        let claims = keys.verify_refresh(&token).expect("verify refresh");
+        assert_eq!(claims.sub, user_id);
+        assert_eq!(claims.kind, TokenKind::Refresh);
+    }
+
+    #[tokio::test]
+    async fn verify_refresh_rejects_access_token() {
+        let keys = make_keys("dev-secret", "iss", "aud");
+        let token = keys.sign_access(Uuid::new_v4()).expect("sign access");
+        let err = keys.verify_refresh(&token).unwrap_err();
+        assert!(err.to_string().contains("not a refresh token"));
+    }
+
+    #[tokio::test]
+    async fn verify_rejects_wrong_issuer_or_audience() {
+        let good_keys = make_keys("same-secret", "good-iss", "good-aud");
+        let bad_keys = make_keys("same-secret", "bad-iss", "bad-aud");
+        let token = good_keys
+            .sign_access(Uuid::new_v4())
+            .expect("sign access");
+        // Using different issuer/audience in validation should fail
+        let err = bad_keys.verify(&token).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.len() > 0);
+    }
+}
+
 pub struct AuthUser(pub Uuid);
 
 #[axum::async_trait]
