@@ -168,9 +168,7 @@ mod tests {
     async fn verify_rejects_wrong_issuer_or_audience() {
         let good_keys = make_keys("same-secret", "good-iss", "good-aud");
         let bad_keys = make_keys("same-secret", "bad-iss", "bad-aud");
-        let token = good_keys
-            .sign_access(Uuid::new_v4())
-            .expect("sign access");
+        let token = good_keys.sign_access(Uuid::new_v4()).expect("sign access");
         // Using different issuer/audience in validation should fail
         let err = bad_keys.verify(&token).unwrap_err();
         let msg = err.to_string();

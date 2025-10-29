@@ -29,6 +29,7 @@ jobs:
 
       - name: Lint
         run: |
+          cargo fmt --all
           cargo fmt --all -- --check
           cargo clippy --all-targets --all-features --workspace --release -- -D warnings
 
