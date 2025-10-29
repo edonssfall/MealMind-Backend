@@ -1,16 +1,17 @@
-use std::net::SocketAddr;
-use axum::{Router, routing::get};
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
-use crate::db::AppState;
+use crate::state::AppState;
 use crate::{auth, meals};
+use axum::{routing::get, Router};
+use std::net::SocketAddr;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 pub fn build_app(state: AppState) -> Router {
     Router::new()
-        .nest("/api/v1",
-              Router::new()
-                  .merge(auth::router())
-                  .merge(meals::router())
-                  .route("/health", get(|| async { "ok" }))
+        .nest(
+            "/api/v1",
+            Router::new()
+                .merge(auth::router())
+                .merge(meals::router())
+                .route("/health", get(|| async { "ok" })),
         )
         .with_state(state)
         .layer(CorsLayer::permissive())
@@ -43,7 +44,7 @@ pub async fn serve(app: Router) -> anyhow::Result<()> {
         std::env::var("APP_HOST").unwrap_or_else(|_| "0.0.0.0".into()),
         std::env::var("APP_PORT").unwrap_or_else(|_| "8080".into())
     )
-        .parse()?;
+    .parse()?;
 
     tracing::info!("listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await?;

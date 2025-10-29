@@ -1,67 +1,55 @@
-use anyhow::Context;
 use bytes::Bytes;
-use uuid::Uuid;
-use crate::db::AppState;
-use super::repo;
+use crate::images::services::{upload_and_link_images, UploadItem};
+use crate::meals::dto::{CreatedMealRequest, CreatedMealResponse};
 
-pub struct UploadItem<'a> {
-    pub body: Bytes,
-    pub content_type: &'a str,
-}
-
-/// Загружает несколько файлов в MinIO, затем в одной транзакции создаёт meal и записи photos.
-/// При ошибке вставки в БД пытается удалить уже загруженные объекты (best-effort).
-pub async fn create_meal_with_photos(
-    state: &crate::db::AppState,
-    user_id: Uuid,
-    files: Vec<UploadItem<'_>>,
-) -> anyhow::Result<(uuid::Uuid, time::OffsetDateTime, Vec<uuid::Uuid>)> {
-    anyhow::ensure!(!files.is_empty(), "no files provided");
-
-    // 1) Сначала грузим все объекты в хранилище и собираем ключи
-    struct StoredObj {
-        key: String,
-        photo_id: Uuid,
+pub async fn create_meal_bytes(
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+    Json(body): Json<CreatedMealRequest>,
+) -> Result<(StatusCode, HeaderMap, Json<CreatedMealResponse>), (StatusCode, String)> {
+    if body.images.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "images must be non-empty".into()));
     }
-    let mut stored: Vec<StoredObj> = Vec::with_capacity(files.len());
 
-    // meal_id заранее
+    // 1) создаём пустой meal c заранее заданным UUID
     let meal_id = Uuid::new_v4();
+    let meal = sqlx::query_as::<_, Meal>(
+        r#"INSERT INTO meals (id, user_id)
+           VALUES ($1, $2)
+           RETURNING id, user_id, title, notes, created_at"#,
+    )
+        .bind(meal_id)
+        .bind(user_id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(internal)?;
 
-    for file in &files {
-        let photo_id = Uuid::new_v4();
-        let ext = ext_from_mime(file.content_type).unwrap_or("bin");
-        let key = format!("meals/{}/{}-{}.{}", user_id, meal_id, photo_id, ext);
+    // 2) подготовим UploadItem[]
+    // если у тебя один общий content-type — прокинь его; иначе возьми "application/octet-stream"
+    let ct = "application/octet-stream";
+    let files: Vec<UploadItem> = body.images.into_iter()
+        .map(|buf| UploadItem {
+            body: Bytes::from(buf.into_vec()),
+            content_type: ct,
+        })
+        .collect();
 
-        state.storage
-            .put_object(&key, file.body.clone(), file.content_type)
-            .await
-            .with_context(|| format!("put_object {}", key))?;
+    // 3) зальём и привяжем к meal
+    let photo_ids = upload_and_link_images(&state, user_id, meal_id, files)
+        .await
+        .map_err(internal)?;
 
-        stored.push(StoredObj { key, photo_id });
-    }
+    // 4) ответ
+    let mut headers = HeaderMap::new();
+    headers.insert(axum::http::header::LOCATION, format!("/meals/{}", meal_id).parse().unwrap());
 
-    // 2) Пишем в БД в транзакции
-    let mut tx = state.db.begin().await.context("begin tx")?;
-
-    let meal = repo::insert_meal_tx(&mut tx, meal_id, user_id).await?;
-
-    for s in &stored {
-        repo::insert_photo_tx(&mut tx, s.photo_id, user_id, meal_id, &s.key, None, "uploaded").await?;
-    }
-
-    tx.commit().await.context("commit tx")?;
-
-    let photo_ids = stored.into_iter().map(|s| s.photo_id).collect();
-    Ok((meal.id, meal.created_at, photo_ids))
-}
-
-fn ext_from_mime(ct: &str) -> Option<&'static str> {
-    match ct {
-        "image/jpeg" | "image/jpg" => Some("jpg"),
-        "image/png" => Some("png"),
-        "image/webp" => Some("webp"),
-        "image/heic" => Some("heic"),
-        _ => None,
-    }
+    Ok((
+        StatusCode::CREATED,
+        headers,
+        Json(CreatedMealResponse {
+            id: meal.id,
+            created_at: meal.created_at,
+            photo_ids,
+        }),
+    ))
 }

@@ -1,15 +1,13 @@
-pub mod handlers;
-mod service;
-mod repo;
 mod dto;
+pub mod handlers;
+mod repo;
+mod services;
 
+use crate::state::AppState;
 use axum::Router;
-use crate::db::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        // список/детали — можешь подключить свои уже существующие list/get
-        .merge(handlers::read_router())
-        // создание meal с фото (multipart) и альтернатива base64
-        .merge(handlers::write_router())
+        .merge(handlers::read_routes())
+        .merge(handlers::write_routes())
 }

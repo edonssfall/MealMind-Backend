@@ -1,8 +1,7 @@
 pub(crate) use crate::auth::dto::{Claims, JwtKeys, TokenKind};
 use crate::config::JwtConfig;
-use crate::db::AppState;
-use argon2::password_hash::SaltString;
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use crate::state::AppState;
+use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::{
     extract::{FromRef, FromRequestParts},
     http::{request::Parts, StatusCode},
@@ -189,36 +188,15 @@ where
 #[cfg(test)]
 mod jwt_tests {
     use super::*;
-    use crate::config::{AppConfig, JwtConfig};
-    use sqlx::postgres::PgPoolOptions;
-    use std::sync::Arc;
 
-    fn make_state_with_jwt(secret: &str, issuer: &str, audience: &str) -> AppState {
-        // Use a lazily connecting pool to avoid touching a real DB during unit tests
-        let db = PgPoolOptions::new()
-            .connect_lazy("postgres://postgres:postgres@localhost:5432/postgres")
-            .expect("lazy pool should construct");
-        let config = Arc::new(AppConfig {
-            database_url: "postgres://postgres:postgres@localhost:5432/postgres".into(),
-            jwt: JwtConfig {
-                secret: secret.into(),
-                issuer: issuer.into(),
-                audience: audience.into(),
-                ttl_minutes: 5,
-                refresh_ttl_minutes: 60,
-            },
-        });
-        AppState { db, config }
-    }
-
-    fn make_keys(secret: &str, issuer: &str, audience: &str) -> JwtKeys {
-        let state = make_state_with_jwt(secret, issuer, audience);
+    fn make_keys() -> JwtKeys {
+        let state = AppState::fake();
         JwtKeys::from_ref(&state)
     }
 
     #[tokio::test]
     async fn sign_and_verify_access_token() {
-        let keys = make_keys("dev-secret", "test-issuer", "test-aud");
+        let keys = make_keys();
         let user_id = Uuid::new_v4();
         let token = keys.sign_access(user_id).expect("sign access");
         let claims = keys.verify(&token).expect("verify token");
@@ -230,7 +208,7 @@ mod jwt_tests {
 
     #[tokio::test]
     async fn sign_and_verify_refresh_token_and_verify_refresh() {
-        let keys = make_keys("dev-secret", "iss", "aud");
+        let keys = make_keys();
         let user_id = Uuid::new_v4();
         let token = keys.sign_refresh(user_id).expect("sign refresh");
         let claims = keys.verify_refresh(&token).expect("verify refresh");
@@ -240,7 +218,7 @@ mod jwt_tests {
 
     #[tokio::test]
     async fn verify_refresh_rejects_access_token() {
-        let keys = make_keys("dev-secret", "iss", "aud");
+        let keys = make_keys();
         let token = keys.sign_access(Uuid::new_v4()).expect("sign access");
         let err = keys.verify_refresh(&token).unwrap_err();
         assert!(err.to_string().contains("not a refresh token"));
@@ -248,8 +226,8 @@ mod jwt_tests {
 
     #[tokio::test]
     async fn verify_rejects_wrong_issuer_or_audience() {
-        let good_keys = make_keys("same-secret", "good-iss", "good-aud");
-        let bad_keys = make_keys("same-secret", "bad-iss", "bad-aud");
+        let good_keys = make_keys();
+        let bad_keys = make_keys();
         let token = good_keys.sign_access(Uuid::new_v4()).expect("sign access");
         // Using different issuer/audience in validation should fail
         let err = bad_keys.verify(&token).unwrap_err();

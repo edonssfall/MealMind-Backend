@@ -1,5 +1,5 @@
-use mealmind::db;
 use mealmind::app;
+use mealmind::state;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
         tracing_subscriber::fmt().with_env_filter(env_filter).init();
     }
 
-    let app_state = db::AppState::init().await?;
+    let app_state = state::AppState::init().await?;
 
     // Run migrations if present
     if let Err(e) = sqlx::migrate!("./migrations").run(&app_state.db).await {

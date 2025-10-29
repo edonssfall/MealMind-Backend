@@ -1,15 +1,7 @@
+use crate::meals::repo::MealNutrition;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
-use crate::db::MealNutrition;
-
-#[derive(Debug, Serialize)]
-pub struct MealListItem {
-    pub id: Uuid,
-    pub title: Option<String>,
-    pub notes: Option<String>,
-    pub created_at: OffsetDateTime,
-}
 
 #[derive(Debug, Serialize)]
 pub struct MealDetails {
@@ -18,13 +10,39 @@ pub struct MealDetails {
     pub notes: Option<String>,
     pub created_at: OffsetDateTime,
     pub nutrition: Option<MealNutrition>,
+    pub images: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreatedMealRequest {
+    pub images: Vec<serde_bytes::ByteBuf>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PutMealRequest {
+    pub id: Uuid,
+    pub title: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DeleteMealRequest {
+    pub id: Uuid,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MealResponce {
+    pub id: Uuid,
+    pub title: Option<String>,
+    pub created_at: OffsetDateTime,
+    pub photos: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct CreatedMealResponse {
     pub id: Uuid,
     pub created_at: OffsetDateTime,
-    pub photo_ids: Vec<Uuid>,
+    pub images: Vec<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,10 +52,6 @@ pub struct Pagination {
     #[serde(default)]
     pub offset: i64,
 }
-fn default_limit() -> i64 { 20 }
-
-#[derive(Debug, Deserialize)]
-pub struct CreateMealBase64 {
-    pub images_b64: Vec<String>,
-    pub content_type: Option<String>,
+fn default_limit() -> i64 {
+    20
 }

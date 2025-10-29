@@ -11,7 +11,7 @@ use crate::{
         repo::User,
         services::{hash_password, is_valid_email, verify_password, AuthUser, JwtKeys},
     },
-    db::AppState,
+    state::AppState,
 };
 
 pub fn auth_routes() -> Router<AppState> {
