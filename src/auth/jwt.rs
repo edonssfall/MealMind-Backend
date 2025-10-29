@@ -112,7 +112,7 @@ pub struct AuthUser(pub Uuid);
 impl<S> FromRequestParts<S> for AuthUser
 where
     S: Send + Sync,
-    JwtKeys: FromRef<S>
+    JwtKeys: FromRef<S>,
 {
     type Rejection = (StatusCode, String);
 

@@ -38,7 +38,6 @@ jobs:
       - name: coverage (optional)
         run: |
           sudo apt-get update && sudo apt-get install -y lcov
-          # здесь можно grcov/llvm-cov; оставь пустышку если ещё не готов
           echo "<coverage placeholder>" > coverage.txt
         if: always()
 

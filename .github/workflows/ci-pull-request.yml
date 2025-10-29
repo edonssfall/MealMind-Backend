@@ -76,9 +76,6 @@ jobs:
           MINIO_KEY: test
           MINIO_SECRET: testtest123
         run: |
-          # здесь подними сервис через бинарь (флагом порт/конфиг),
-          # дождись readiness и запусти blackbox-тесты (curl/newman/httpie/pytest-requests и т.п.)
           ./bin/mealmind --config ci-config.toml &
           sleep 5
           curl -f http://localhost:8080/health
-          # далі – сценарии запросов

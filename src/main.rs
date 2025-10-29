@@ -8,7 +8,7 @@ mod config;
 mod db;
 mod routes;
 
-use crate::routes::{auth::auth_routes, me::me_route};
+use crate::routes::{auth::auth_routes, me::me_route, meals::meals_routes};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -40,6 +40,7 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .merge(auth_routes())
         .route("/me", get(me_route))
+        .merge(meals_routes())
         .with_state(app_state)
         .layer(CorsLayer::permissive())
         .layer(
