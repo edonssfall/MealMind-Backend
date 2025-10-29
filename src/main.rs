@@ -1,14 +1,5 @@
-use std::net::SocketAddr;
-
-use axum::{routing::get, Router};
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
-
-mod auth;
-mod config;
-mod db;
-mod routes;
-
-use crate::routes::{auth::auth_routes, me::me_route, meals::meals_routes};
+use mealmind::db;
+use mealmind::app;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -37,44 +28,7 @@ async fn main() -> anyhow::Result<()> {
         tracing::warn!(error = %e, "migrations folder not found or migration failed; continuing");
     }
 
-    let app = Router::new()
-        .merge(auth_routes())
-        .route("/me", get(me_route))
-        .merge(meals_routes())
-        .with_state(app_state)
-        .layer(CorsLayer::permissive())
-        .layer(
-            TraceLayer::new_for_http()
-                .make_span_with(|req: &axum::http::Request<_>| {
-                    let method = req.method().clone();
-                    let uri = req.uri().clone();
-                    tracing::info_span!("http_request", %method, uri = %uri)
-                })
-                .on_response(
-                    |res: &axum::http::Response<_>,
-                     _latency: std::time::Duration,
-                     span: &tracing::Span| {
-                        let status = res.status();
-                        span.record("status", tracing::field::display(status));
-                        if status.is_server_error() {
-                            tracing::error!(%status, "response");
-                        } else {
-                            tracing::info!(%status, "response");
-                        }
-                    },
-                ),
-        );
+    let app = app::build_app(app_state);
 
-    let addr: SocketAddr = format!(
-        "{}:{}",
-        std::env::var("APP_HOST").unwrap_or_else(|_| "0.0.0.0".into()),
-        std::env::var("APP_PORT").unwrap_or_else(|_| "8080".into())
-    )
-    .parse()?;
-
-    tracing::info!("listening on {}", addr);
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
-
-    Ok(())
+    app::serve(app).await
 }
