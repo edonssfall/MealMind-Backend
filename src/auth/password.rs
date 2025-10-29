@@ -27,3 +27,29 @@ pub fn verify_password(plain: &str, hash: &str) -> anyhow::Result<bool> {
         .verify_password(plain.as_bytes(), &parsed)
         .is_ok())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hash_and_verify_roundtrip() {
+        let password = "Secur3P@ssw0rd!";
+        let hash = hash_password(password).expect("hashing should succeed");
+        assert!(verify_password(password, &hash).expect("verify should succeed"));
+    }
+
+    #[test]
+    fn verify_rejects_wrong_password() {
+        let password = "correct-horse-battery-staple";
+        let hash = hash_password(password).expect("hashing should succeed");
+        assert!(!verify_password("wrong-password", &hash).expect("verify should not error"));
+    }
+
+    #[test]
+    fn verify_errors_on_malformed_hash() {
+        let err = verify_password("anything", "not-a-valid-hash").unwrap_err();
+        let msg = err.to_string();
+        assert!(!msg.is_empty());
+    }
+}
