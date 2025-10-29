@@ -50,6 +50,6 @@ mod tests {
     fn verify_errors_on_malformed_hash() {
         let err = verify_password("anything", "not-a-valid-hash").unwrap_err();
         let msg = err.to_string();
-        assert!(msg.len() > 0);
+        assert!(!msg.is_empty());
     }
 }

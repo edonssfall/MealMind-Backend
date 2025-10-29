@@ -104,6 +104,56 @@ impl JwtKeys {
     }
 }
 
+// tests appear at end of file to satisfy clippy
+
+pub struct AuthUser(pub Uuid);
+
+#[axum::async_trait]
+impl<S> FromRequestParts<S> for AuthUser
+where
+    S: Send + Sync,
+    JwtKeys: FromRef<S>
+{
+    type Rejection = (StatusCode, String);
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let keys = JwtKeys::from_ref(state);
+        let auth_header = parts
+            .headers
+            .get(axum::http::header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .ok_or((
+                StatusCode::UNAUTHORIZED,
+                "Missing Authorization header".to_string(),
+            ))?;
+
+        let token = auth_header.strip_prefix("Bearer ").ok_or((
+            StatusCode::UNAUTHORIZED,
+            "Invalid Authorization header".to_string(),
+        ))?;
+
+        let claims = match keys.verify(token) {
+            Ok(c) => c,
+            Err(_) => {
+                warn!("invalid or expired token");
+                return Err((
+                    StatusCode::UNAUTHORIZED,
+                    "Invalid or expired token".to_string(),
+                ));
+            }
+        };
+
+        if claims.kind != TokenKind::Access {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                "Access token required".to_string(),
+            ));
+        }
+
+        Ok(AuthUser(claims.sub))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,54 +222,6 @@ mod tests {
         // Using different issuer/audience in validation should fail
         let err = bad_keys.verify(&token).unwrap_err();
         let msg = err.to_string();
-        assert!(msg.len() > 0);
-    }
-}
-
-pub struct AuthUser(pub Uuid);
-
-#[axum::async_trait]
-impl<S> FromRequestParts<S> for AuthUser
-where
-    S: Send + Sync,
-    JwtKeys: FromRef<S>,
-{
-    type Rejection = (StatusCode, String);
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let keys = JwtKeys::from_ref(state);
-        let auth_header = parts
-            .headers
-            .get(axum::http::header::AUTHORIZATION)
-            .and_then(|v| v.to_str().ok())
-            .ok_or((
-                StatusCode::UNAUTHORIZED,
-                "Missing Authorization header".to_string(),
-            ))?;
-
-        let token = auth_header.strip_prefix("Bearer ").ok_or((
-            StatusCode::UNAUTHORIZED,
-            "Invalid Authorization header".to_string(),
-        ))?;
-
-        let claims = match keys.verify(token) {
-            Ok(c) => c,
-            Err(_) => {
-                warn!("invalid or expired token");
-                return Err((
-                    StatusCode::UNAUTHORIZED,
-                    "Invalid or expired token".to_string(),
-                ));
-            }
-        };
-
-        if claims.kind != TokenKind::Access {
-            return Err((
-                StatusCode::UNAUTHORIZED,
-                "Access token required".to_string(),
-            ));
-        }
-
-        Ok(AuthUser(claims.sub))
+        assert!(!msg.is_empty());
     }
 }
