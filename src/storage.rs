@@ -1,6 +1,13 @@
 use anyhow::Context;
-use async_trait::async_trait;
-use aws_sdk_s3::{config::{Credentials, Region}, Client};
+use axum::async_trait;
+use aws_config::{defaults, BehaviorVersion};
+use aws_credential_types::Credentials;
+use aws_sdk_s3::{
+    config::{Builder as S3ConfigBuilder, Region},
+    presigning::PresigningConfig,
+    Client,
+};
+use aws_smithy_types::byte_stream::ByteStream;
 use bytes::Bytes;
 
 #[async_trait]
@@ -24,16 +31,20 @@ impl Storage {
         secret_key: &str,
         region: &str,
     ) -> anyhow::Result<Self> {
-        let region = Region::new(region.to_string());
-        let creds = Credentials::new(access_key, secret_key, None, None, "static");
-        let conf = aws_config::from_env()
-            .region(region)
-            .credentials_provider(creds)
+        let shared = defaults(BehaviorVersion::latest())
+            .region(Region::new(region.to_string()))
+            .credentials_provider(Credentials::new(access_key, secret_key, None, None, "static"))
             .endpoint_url(endpoint)
             .load()
             .await;
+
+        let conf = S3ConfigBuilder::from(&shared)
+            .endpoint_url(endpoint)
+            .force_path_style(true)
+            .build();
+
         Ok(Self {
-            client: Client::new(&conf),
+            client: Client::from_conf(conf),
             bucket: bucket.to_string(),
         })
     }
@@ -46,7 +57,7 @@ impl StorageClient for Storage {
             .put_object()
             .bucket(&self.bucket)
             .key(key)
-            .body(body.into())
+            .body(ByteStream::from(body))
             .content_type(content_type)
             .send()
             .await
@@ -66,14 +77,11 @@ impl StorageClient for Storage {
     }
 
     async fn presign_get(&self, key: &str, seconds: u64) -> anyhow::Result<String> {
-        use aws_sdk_s3::presigning::PresigningConfig;
         let req = self.client.get_object().bucket(&self.bucket).key(key);
         let presigned = req
-            .presigned(PresigningConfig::expires_in(
-                std::time::Duration::from_secs(seconds),
-            )?)
+            .presigned(PresigningConfig::expires_in(std::time::Duration::from_secs(seconds))?)
             .await
-            .context("s3 presign")?;
+            .context("s3 presign_get")?;
         Ok(presigned.uri().to_string())
     }
 }

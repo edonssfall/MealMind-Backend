@@ -12,7 +12,6 @@ pub struct UploadItem<'a> {
 
 pub async fn upload_and_link_images(
     st: &AppState,
-    user_id: Uuid,
     meal_id: Uuid,
     images: Vec<UploadItem<'_>>,
 ) -> anyhow::Result<Vec<Uuid>> {
@@ -26,7 +25,7 @@ pub async fn upload_and_link_images(
     for img in images {
         let id = Uuid::new_v4();
         let ext = ext_from_mime(img.content_type).unwrap_or("bin");
-        let key = format!("meals/{}/{}-{}.{}", user_id, meal_id, id, ext);
+        let key = format!("meals/{}/{}.{}", meal_id, id, ext);
         st.storage
             .put_object(&key, img.body, img.content_type)
             .await
@@ -36,7 +35,7 @@ pub async fn upload_and_link_images(
 
     let mut tx = st.db.begin().await.context("begin tx")?;
     for o in &objs {
-        repo::insert_photo_tx(&mut tx, o.id, user_id, Some(meal_id), &o.key).await?;
+        repo::insert_photo_tx(&mut tx, o.id, Some(meal_id), &o.key).await?;
     }
     tx.commit().await.context("commit tx")?;
 
@@ -74,7 +73,7 @@ pub async fn presign_by_photo_id(st: &AppState, s3_key: String) -> anyhow::Resul
 }
 
 #[cfg(test)]
-mod image_tests {
+mod photo_tests {
     use crate::state::AppState;
 
     #[test]

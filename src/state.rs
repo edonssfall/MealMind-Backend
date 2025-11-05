@@ -1,13 +1,14 @@
 use std::sync::Arc;
+use axum::async_trait;
 use sqlx::PgPool;
 use crate::config::AppConfig;
-use crate::storage::{Storage, StorageClient}; // ← импорт трейта
+use crate::storage::{Storage, StorageClient};
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: PgPool,
     pub config: Arc<AppConfig>,
-    pub storage: Arc<dyn StorageClient>, // ← главное изменение
+    pub storage: Arc<dyn StorageClient>,
 }
 
 impl AppState {
@@ -28,7 +29,7 @@ impl AppState {
                 &config.minio_secret_key,
                 "us-east-1",
             ).await?
-        ) as Arc<dyn StorageClient>; // ← привести к трейту
+        ) as Arc<dyn StorageClient>;
 
         Ok(Self { db, config, storage })
     }
@@ -36,14 +37,14 @@ impl AppState {
     pub fn from_parts(
         db: PgPool,
         config: Arc<AppConfig>,
-        storage: Arc<dyn StorageClient>, // ← сигнатура тоже меняется
+        storage: Arc<dyn StorageClient>,
     ) -> Self {
         Self { db, config, storage }
     }
 
     pub fn fake() -> Self {
         use bytes::Bytes;
-        use async_trait::async_trait;
+        use axum::async_trait;
 
         #[derive(Clone)]
         struct FakeStorage;

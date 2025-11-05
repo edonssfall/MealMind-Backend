@@ -2,13 +2,10 @@ pub(crate) use crate::auth::dto::{Claims, JwtKeys, TokenKind};
 use crate::config::JwtConfig;
 use crate::state::AppState;
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use axum::{
-    extract::{FromRef, FromRequestParts},
-    http::{request::Parts, StatusCode},
-};
+use axum::{async_trait, extract::{FromRef, FromRequestParts}, http::{request::Parts, StatusCode}};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use lazy_static::lazy_static;
-use rand_core::OsRng;
+use rand::rngs::OsRng;
 use regex::Regex;
 use std::time::Duration;
 use time::{Duration as TimeDuration, OffsetDateTime};
@@ -139,7 +136,7 @@ mod password_tests {
 
 pub struct AuthUser(pub Uuid);
 
-#[axum::async_trait]
+#[async_trait]
 impl<S> FromRequestParts<S> for AuthUser
 where
     S: Send + Sync,
