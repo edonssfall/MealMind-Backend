@@ -1,6 +1,6 @@
 -- Meal nutrition table (1:1 with meals)
 CREATE TABLE IF NOT EXISTS meal_nutrition (
-    meal_id UUID PRIMARY KEY REFERENCES meals(id) ON DELETE CASCADE,
+    meal_id UUID PRIMARY KEY REFERENCES meals(id) ON DELETE RESTRICT,
     total_calories_kcal NUMERIC(10,2),
     protein_g NUMERIC(10,2),
     fat_g NUMERIC(10,2),
@@ -12,5 +12,3 @@ CREATE TABLE IF NOT EXISTS meal_nutrition (
     ai_raw JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-
