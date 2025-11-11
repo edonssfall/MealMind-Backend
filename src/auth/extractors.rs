@@ -1,11 +1,11 @@
+use crate::auth::dto::{JwtKeys, TokenKind};
+use axum::extract::FromRef;
 use axum::{
     async_trait,
     extract::FromRequestParts,
     http::{request::Parts, StatusCode},
 };
-use axum::extract::FromRef;
 use uuid::Uuid;
-use crate::auth::dto::{JwtKeys, TokenKind};
 
 /// Extracts and validates JWT, returning the user ID.
 pub struct AuthUser(pub Uuid);

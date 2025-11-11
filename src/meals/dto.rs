@@ -1,7 +1,7 @@
+use crate::meals::repo_types::MealNutrition;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
-use crate::meals::repo_types::MealNutrition;
 
 /// Full meal data with nutrition and images.
 #[derive(Debug, Serialize)]

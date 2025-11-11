@@ -26,10 +26,10 @@ pub async fn create_meal_tx(
         RETURNING id, created_at
         "#,
     )
-        .bind(user_id)
-        .fetch_one(tx.as_mut())
-        .await
-        .context("insert meal")?;
+    .bind(user_id)
+    .fetch_one(tx.as_mut())
+    .await
+    .context("insert meal")?;
 
     Ok((rec.id, rec.created_at))
 }
@@ -49,14 +49,14 @@ pub async fn update_meal_full(
          WHERE id = $3 AND (user_id = $4 OR user_id IS NULL)
         "#,
     )
-        .bind(title)
-        .bind(notes)
-        .bind(meal_id)
-        .bind(user_id)
-        .execute(db)
-        .await
-        .context("update meal")?
-        .rows_affected();
+    .bind(title)
+    .bind(notes)
+    .bind(meal_id)
+    .bind(user_id)
+    .execute(db)
+    .await
+    .context("update meal")?
+    .rows_affected();
 
     anyhow::ensure!(rows == 1, "meal not found or not accessible");
     Ok(())
@@ -75,12 +75,12 @@ pub async fn unlink_meal_from_user(
          WHERE id = $1 AND user_id = $2
         "#,
     )
-        .bind(meal_id)
-        .bind(user_id)
-        .execute(db)
-        .await
-        .context("unlink meal")?
-        .rows_affected();
+    .bind(meal_id)
+    .bind(user_id)
+    .execute(db)
+    .await
+    .context("unlink meal")?
+    .rows_affected();
 
     anyhow::ensure!(rows == 1, "meal not found or already unlinked");
     Ok(())
@@ -107,12 +107,12 @@ pub async fn list_meals(
          LIMIT $2 OFFSET $3
         "#,
     )
-        .bind(user_id)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(db)
-        .await
-        .context("list meals")?;
+    .bind(user_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(db)
+    .await
+    .context("list meals")?;
 
     Ok(rows
         .into_iter()
@@ -139,11 +139,11 @@ pub async fn get_meal_details(
          WHERE id = $1 AND (user_id = $2 OR user_id IS NULL)
         "#,
     )
-        .bind(meal_id)
-        .bind(user_id)
-        .fetch_one(db)
-        .await
-        .context("get meal")?;
+    .bind(meal_id)
+    .bind(user_id)
+    .fetch_one(db)
+    .await
+    .context("get meal")?;
 
     // Load nutrition (NUMERIC -> DOUBLE PRECISION for f64).
     let nutr: Option<MealNutrition> = sqlx::query_as::<_, MealNutrition>(
@@ -164,10 +164,10 @@ pub async fn get_meal_details(
          WHERE meal_id = $1
         "#,
     )
-        .bind(meal_id)
-        .fetch_optional(db)
-        .await
-        .context("get nutrition")?;
+    .bind(meal_id)
+    .fetch_optional(db)
+    .await
+    .context("get nutrition")?;
 
     // Load photos
     let photos = sqlx::query_as::<_, PhotoKeyRow>(
@@ -178,13 +178,13 @@ pub async fn get_meal_details(
          ORDER BY created_at ASC
         "#,
     )
-        .bind(meal_id)
-        .fetch_all(db)
-        .await
-        .context("get meal photos")?
-        .into_iter()
-        .map(|r| r.s3_key)
-        .collect::<Vec<_>>();
+    .bind(meal_id)
+    .fetch_all(db)
+    .await
+    .context("get meal photos")?
+    .into_iter()
+    .map(|r| r.s3_key)
+    .collect::<Vec<_>>();
 
     Ok(MealDetails {
         id: m.id,

@@ -6,8 +6,8 @@ mod dto;
 pub(crate) mod extractors;
 pub mod handlers;
 pub mod repo;
-pub mod services;
 mod repo_types;
+pub mod services;
 
 /// Combines all auth-related routes (register, login, refresh, me).
 pub fn router() -> Router<AppState> {

@@ -34,7 +34,10 @@ async fn create_meal(
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "create_meal failed");
-            (StatusCode::INTERNAL_SERVER_ERROR, "failed to create meal".into())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to create meal".into(),
+            )
         })?;
     Ok(Json(resp))
 }
@@ -50,7 +53,10 @@ async fn list_meals(
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "list_meals failed");
-            (StatusCode::INTERNAL_SERVER_ERROR, "failed to list meals".into())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to list meals".into(),
+            )
         })?;
     Ok(Json(rows))
 }
@@ -69,7 +75,10 @@ async fn get_meal(
                 return (StatusCode::NOT_FOUND, "meal not found".into());
             }
             tracing::error!(error = %e, "get_meal failed");
-            (StatusCode::INTERNAL_SERVER_ERROR, "failed to get meal".into())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to get meal".into(),
+            )
         })?;
     Ok(Json(m))
 }
@@ -88,7 +97,10 @@ async fn put_meal(
                 return (StatusCode::NOT_FOUND, "meal not found".into());
             }
             tracing::error!(error = %e, "put_meal failed");
-            (StatusCode::INTERNAL_SERVER_ERROR, "failed to update meal".into())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to update meal".into(),
+            )
         })?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -107,7 +119,10 @@ async fn delete_meal(
                 return (StatusCode::NOT_FOUND, "meal not found".into());
             }
             tracing::error!(error = %e, "delete_meal failed");
-            (StatusCode::INTERNAL_SERVER_ERROR, "failed to unlink meal".into())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to unlink meal".into(),
+            )
         })?;
     Ok(StatusCode::NO_CONTENT)
 }

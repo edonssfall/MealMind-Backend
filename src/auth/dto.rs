@@ -16,12 +16,12 @@ pub enum TokenKind {
 /// Standard JWT claims used in the app.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
-    pub sub: Uuid,      // user ID
-    pub exp: usize,     // expiration time
-    pub iat: usize,     // issued at
-    pub iss: String,    // issuer
-    pub aud: String,    // audience
-    pub kind: TokenKind // access or refresh
+    pub sub: Uuid,       // user ID
+    pub exp: usize,      // expiration time
+    pub iat: usize,      // issued at
+    pub iss: String,     // issuer
+    pub aud: String,     // audience
+    pub kind: TokenKind, // access or refresh
 }
 
 /// Holds JWT signing and verification keys with config data.

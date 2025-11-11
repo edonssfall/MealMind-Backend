@@ -14,10 +14,10 @@ pub enum TokenKind {
 /// JWT payload used for authentication.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: Uuid,      // user ID
-    pub iat: usize,     // issued at (unix timestamp)
-    pub exp: usize,     // expires at (unix timestamp)
-    pub iss: String,    // issuer
-    pub aud: String,    // audience
-    pub kind: TokenKind // token type
+    pub sub: Uuid,       // user ID
+    pub iat: usize,      // issued at (unix timestamp)
+    pub exp: usize,      // expires at (unix timestamp)
+    pub iss: String,     // issuer
+    pub aud: String,     // audience
+    pub kind: TokenKind, // token type
 }

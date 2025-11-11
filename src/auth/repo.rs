@@ -1,6 +1,5 @@
-use sqlx::PgPool;
 use crate::auth::repo_types::User;
-
+use sqlx::PgPool;
 
 impl User {
     /// Find a user by email.
@@ -12,9 +11,9 @@ impl User {
             WHERE email = $1
             "#,
         )
-            .bind(email)
-            .fetch_optional(db)
-            .await?;
+        .bind(email)
+        .fetch_optional(db)
+        .await?;
         Ok(user)
     }
 
@@ -27,10 +26,10 @@ impl User {
             RETURNING id, email, password_hash, created_at
             "#,
         )
-            .bind(email)
-            .bind(password_hash)
-            .fetch_one(db)
-            .await?;
+        .bind(email)
+        .bind(password_hash)
+        .fetch_one(db)
+        .await?;
         Ok(user)
     }
 }

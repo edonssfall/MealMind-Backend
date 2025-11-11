@@ -8,9 +8,9 @@ use tracing::{info, instrument};
 use crate::{
     auth::{
         dto::{AuthResponse, LoginRequest, PublicUser, RefreshRequest, RegisterRequest},
+        extractors::AuthUser,
         repo_types::User,
         services::{hash_password, is_valid_email, verify_password, JwtKeys},
-        extractors::AuthUser,
     },
     state::AppState,
 };
@@ -40,12 +40,18 @@ pub async fn register(
         return Err((axum::http::StatusCode::BAD_REQUEST, "Invalid email".into()));
     }
     if payload.password.len() < 8 {
-        return Err((axum::http::StatusCode::BAD_REQUEST, "Password too short".into()));
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            "Password too short".into(),
+        ));
     }
 
     // Check if email already exists
     if let Ok(Some(_)) = User::find_by_email(&state.db, &payload.email).await {
-        return Err((axum::http::StatusCode::CONFLICT, "Email already registered".into()));
+        return Err((
+            axum::http::StatusCode::CONFLICT,
+            "Email already registered".into(),
+        ));
     }
 
     // Hash and store user
@@ -86,14 +92,22 @@ pub async fn login(
     // Check user exists
     let user = match User::find_by_email(&state.db, &payload.email).await {
         Ok(Some(u)) => u,
-        _ => return Err((axum::http::StatusCode::UNAUTHORIZED, "Invalid credentials".into())),
+        _ => {
+            return Err((
+                axum::http::StatusCode::UNAUTHORIZED,
+                "Invalid credentials".into(),
+            ))
+        }
     };
 
     // Verify password
     let ok = verify_password(&payload.password, &user.password_hash)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     if !ok {
-        return Err((axum::http::StatusCode::UNAUTHORIZED, "Invalid credentials".into()));
+        return Err((
+            axum::http::StatusCode::UNAUTHORIZED,
+            "Invalid credentials".into(),
+        ));
     }
 
     // Generate JWT pair
@@ -123,9 +137,12 @@ pub async fn refresh(
     Json(payload): Json<RefreshRequest>,
 ) -> Result<Json<AuthResponse>, (axum::http::StatusCode, String)> {
     let keys = JwtKeys::from_ref(&state);
-    let claims = keys
-        .verify_refresh(&payload.refresh_token)
-        .map_err(|_| (axum::http::StatusCode::UNAUTHORIZED, "Invalid or expired token".into()))?;
+    let claims = keys.verify_refresh(&payload.refresh_token).map_err(|_| {
+        (
+            axum::http::StatusCode::UNAUTHORIZED,
+            "Invalid or expired token".into(),
+        )
+    })?;
 
     // New tokens
     let access_token = keys
@@ -139,10 +156,15 @@ pub async fn refresh(
     let user = sqlx::query_as::<_, User>(
         r#"SELECT id, email, password_hash, created_at FROM users WHERE id = $1"#,
     )
-        .bind(claims.sub)
-        .fetch_one(&state.db)
-        .await
-        .map_err(|_| (axum::http::StatusCode::UNAUTHORIZED, "User not found".into()))?;
+    .bind(claims.sub)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|_| {
+        (
+            axum::http::StatusCode::UNAUTHORIZED,
+            "User not found".into(),
+        )
+    })?;
 
     Ok(Json(AuthResponse {
         access_token,
@@ -162,10 +184,15 @@ pub async fn get_me(
     let user = sqlx::query_as::<_, User>(
         r#"SELECT id, email, password_hash, created_at FROM users WHERE id = $1"#,
     )
-        .bind(user_id)
-        .fetch_one(&state.db)
-        .await
-        .map_err(|_| (axum::http::StatusCode::UNAUTHORIZED, "User not found".into()))?;
+    .bind(user_id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|_| {
+        (
+            axum::http::StatusCode::UNAUTHORIZED,
+            "User not found".into(),
+        )
+    })?;
 
     Ok(Json(PublicUser {
         id: user.id,
