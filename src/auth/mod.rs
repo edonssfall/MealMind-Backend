@@ -1,7 +1,6 @@
 use crate::state::AppState;
 use axum::Router;
 
-mod claims;
 mod dto;
 pub(crate) mod extractors;
 pub mod handlers;
