@@ -1,17 +1,8 @@
 use anyhow::Context;
 use sqlx::{Executor, PgPool, Postgres, Transaction};
-use time::OffsetDateTime;
 use uuid::Uuid;
 
-#[derive(Debug)]
-pub struct PhotoRow {
-    pub id: Uuid,
-    pub user_id: Uuid,
-    pub meal_id: Option<Uuid>,
-    pub s3_key: String,
-    pub created_at: OffsetDateTime,
-}
-
+/// Insert a new photo entry within a transaction.
 pub async fn insert_photo_tx(
     tx: &mut Transaction<'_, Postgres>,
     photo_id: Uuid,
@@ -22,11 +13,11 @@ pub async fn insert_photo_tx(
         sqlx::query(
             r#"
             INSERT INTO photos (id, meal_id, s3_key, status)
-            VALUES ($1, $2, $3, $4, 'uploaded')
+            VALUES ($1, $2, $3, 'uploaded')
             "#,
         )
         .bind(photo_id)
-        .bind(meal_id) // Option<Uuid> → NULL ок
+        .bind(meal_id) // Option<Uuid> → NULL allowed
         .bind(s3_key),
     )
     .await
@@ -35,6 +26,9 @@ pub async fn insert_photo_tx(
     Ok(())
 }
 
+// ---- Queries ----
+
+/// Return all photo IDs and keys for a given meal.
 pub async fn list_photo_ids_by_meal(
     db: &PgPool,
     meal_id: Uuid,
@@ -42,9 +36,9 @@ pub async fn list_photo_ids_by_meal(
     let rows: Vec<(Uuid, String)> = sqlx::query_as::<_, (Uuid, String)>(
         r#"
         SELECT id, s3_key
-        FROM photos
-        WHERE meal_id = $2
-        ORDER BY created_at ASC
+          FROM photos
+         WHERE meal_id = $1
+         ORDER BY created_at ASC
         "#,
     )
     .bind(meal_id)
@@ -55,6 +49,7 @@ pub async fn list_photo_ids_by_meal(
     Ok(rows)
 }
 
+/// Return the first photo of a meal, if any.
 pub async fn get_first_photo_by_meal(
     db: &PgPool,
     meal_id: Uuid,
@@ -62,10 +57,10 @@ pub async fn get_first_photo_by_meal(
     let row = sqlx::query_as::<_, (Uuid, String)>(
         r#"
         SELECT id, s3_key
-        FROM photos
-        WHERE meal_id = $2
-        ORDER BY created_at ASC
-        LIMIT 1
+          FROM photos
+         WHERE meal_id = $1
+         ORDER BY created_at ASC
+         LIMIT 1
         "#,
     )
     .bind(meal_id)

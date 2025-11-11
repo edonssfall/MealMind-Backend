@@ -1,13 +1,15 @@
 use crate::state::AppState;
 use axum::Router;
 
+mod claims;
 mod dto;
+pub(crate) mod extractors;
 pub mod handlers;
 pub mod repo;
 pub mod services;
-pub(crate) mod extractors;
-mod claims;
+mod repo_types;
 
+/// Combines all auth-related routes (register, login, refresh, me).
 pub fn router() -> Router<AppState> {
     Router::new()
         .merge(handlers::auth_routes())

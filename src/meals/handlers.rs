@@ -10,6 +10,7 @@ use crate::auth::extractors::AuthUser;
 use crate::meals::{dto::*, repo, services};
 use crate::state::AppState;
 
+/// Defines all meal-related endpoints.
 pub fn meals_routes() -> Router<AppState> {
     Router::new()
         .route(
@@ -22,6 +23,7 @@ pub fn meals_routes() -> Router<AppState> {
         .route("/meals/:id", get(get_meal))
 }
 
+/// Create new meal with optional images.
 #[tracing::instrument(skip(st, req), fields(user_id = %user_id))]
 async fn create_meal(
     State(st): State<AppState>,
@@ -37,6 +39,7 @@ async fn create_meal(
     Ok(Json(resp))
 }
 
+/// List meals with pagination.
 #[tracing::instrument(skip(st), fields(user_id = %user_id, limit = p.limit, offset = p.offset))]
 async fn list_meals(
     State(st): State<AppState>,
@@ -52,6 +55,7 @@ async fn list_meals(
     Ok(Json(rows))
 }
 
+/// Get detailed info for a specific meal.
 #[tracing::instrument(skip(st), fields(user_id = %user_id, meal_id = %id))]
 async fn get_meal(
     State(st): State<AppState>,
@@ -61,7 +65,6 @@ async fn get_meal(
     let m = repo::get_meal_details(&st.db, user_id, id)
         .await
         .map_err(|e| {
-            // Если хочешь отличать 404:
             if let Some(sqlx::Error::RowNotFound) = e.downcast_ref::<sqlx::Error>() {
                 return (StatusCode::NOT_FOUND, "meal not found".into());
             }
@@ -71,6 +74,7 @@ async fn get_meal(
     Ok(Json(m))
 }
 
+/// Update meal title/notes.
 #[tracing::instrument(skip(st, req), fields(user_id = %user_id, meal_id = %req.id))]
 async fn put_meal(
     State(st): State<AppState>,
@@ -89,6 +93,7 @@ async fn put_meal(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Delete (unlink) meal from user.
 #[tracing::instrument(skip(st, req), fields(user_id = %user_id, meal_id = %req.id))]
 async fn delete_meal(
     State(st): State<AppState>,
@@ -101,7 +106,7 @@ async fn delete_meal(
             if let Some(sqlx::Error::RowNotFound) = e.downcast_ref::<sqlx::Error>() {
                 return (StatusCode::NOT_FOUND, "meal not found".into());
             }
-            tracing::error!(error = %e, "delete_meal (unlink) failed");
+            tracing::error!(error = %e, "delete_meal failed");
             (StatusCode::INTERNAL_SERVER_ERROR, "failed to unlink meal".into())
         })?;
     Ok(StatusCode::NO_CONTENT)

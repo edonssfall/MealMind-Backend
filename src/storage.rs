@@ -1,5 +1,4 @@
 use anyhow::Context;
-use axum::async_trait;
 use aws_config::{defaults, BehaviorVersion};
 use aws_credential_types::Credentials;
 use aws_sdk_s3::{
@@ -8,6 +7,7 @@ use aws_sdk_s3::{
     Client,
 };
 use aws_smithy_types::byte_stream::ByteStream;
+use axum::async_trait;
 use bytes::Bytes;
 
 #[async_trait]
@@ -33,7 +33,9 @@ impl Storage {
     ) -> anyhow::Result<Self> {
         let shared = defaults(BehaviorVersion::latest())
             .region(Region::new(region.to_string()))
-            .credentials_provider(Credentials::new(access_key, secret_key, None, None, "static"))
+            .credentials_provider(Credentials::new(
+                access_key, secret_key, None, None, "static",
+            ))
             .endpoint_url(endpoint)
             .load()
             .await;
@@ -79,7 +81,9 @@ impl StorageClient for Storage {
     async fn presign_get(&self, key: &str, seconds: u64) -> anyhow::Result<String> {
         let req = self.client.get_object().bucket(&self.bucket).key(key);
         let presigned = req
-            .presigned(PresigningConfig::expires_in(std::time::Duration::from_secs(seconds))?)
+            .presigned(PresigningConfig::expires_in(
+                std::time::Duration::from_secs(seconds),
+            )?)
             .await
             .context("s3 presign_get")?;
         Ok(presigned.uri().to_string())

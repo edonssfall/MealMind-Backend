@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
-
 use crate::meals::repo_types::MealNutrition;
 
+/// Full meal data with nutrition and images.
 #[derive(Debug, Serialize)]
 pub struct MealDetails {
     pub id: Uuid,
@@ -14,13 +14,15 @@ pub struct MealDetails {
     pub images: Vec<String>,
 }
 
+/// Request for creating a new meal with images.
 #[derive(Debug, Deserialize)]
 pub struct CreatedMealRequest {
     pub images: Vec<serde_bytes::ByteBuf>,
     #[serde(default)]
-    pub content_types: Vec<String>, // parallel to images; optional, default image/jpeg
+    pub content_types: Vec<String>, // optional MIME types
 }
 
+/// Request for updating an existing meal.
 #[derive(Debug, Deserialize)]
 pub struct PutMealRequest {
     pub id: Uuid,
@@ -28,11 +30,13 @@ pub struct PutMealRequest {
     pub notes: Option<String>,
 }
 
+/// Request for deleting a meal.
 #[derive(Debug, Deserialize)]
 pub struct DeleteMealRequest {
     pub id: Uuid,
 }
 
+/// Basic meal info used in list responses.
 #[derive(Debug, Serialize)]
 pub struct MealResponce {
     pub id: Uuid,
@@ -41,6 +45,7 @@ pub struct MealResponce {
     pub photos: Vec<String>,
 }
 
+/// Response returned after meal creation.
 #[derive(Debug, Serialize)]
 pub struct CreatedMealResponse {
     pub id: Uuid,
@@ -48,6 +53,7 @@ pub struct CreatedMealResponse {
     pub images: Vec<Uuid>,
 }
 
+/// Pagination query params.
 #[derive(Debug, Deserialize)]
 pub struct Pagination {
     #[serde(default = "default_limit")]
@@ -55,4 +61,7 @@ pub struct Pagination {
     #[serde(default)]
     pub offset: i64,
 }
-fn default_limit() -> i64 { 20 }
+
+fn default_limit() -> i64 {
+    20
+}

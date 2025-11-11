@@ -3,76 +3,29 @@ use sqlx::{PgConnection, PgPool};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use crate::meals::dto::{MealDetails, MealResponce};
-use crate::meals::repo_types::MealNutrition;
+use crate::meals::{
+    dto::{MealDetails, MealResponce},
+    repo_types::{ListMealRow, MealNutrition, MealRow, PhotoKeyRow},
+};
 
-#[derive(sqlx::FromRow)]
-struct MealRow {
-    id: Uuid,
-    title: Option<String>,
-    notes: Option<String>,
-    created_at: OffsetDateTime,
-}
-
-#[derive(sqlx::FromRow)]
-struct ListMealRow {
-    id: Uuid,
-    title: Option<String>,
-    created_at: OffsetDateTime,
-    photos: Option<Vec<String>>,
-}
-
-#[derive(sqlx::FromRow)]
-struct PhotoKeyRow {
-    s3_key: String,
-}
-
-#[derive(sqlx::FromRow)]
-struct NutritionF64Row {
-//    meal_id: Uuid,
-    total_calories_kcal: Option<f64>,
-    protein_g: Option<f64>,
-    fat_g: Option<f64>,
-    carbs_g: Option<f64>,
-    sodium_mg: Option<f64>,
-    sugar_g: Option<f64>,
-    fiber_g: Option<f64>,
-    micros: serde_json::Value,
-    ai_raw: serde_json::Value,
-    global_score: Option<f64>,
-    created_at: OffsetDateTime,
-}
-
-impl From<NutritionF64Row> for MealNutrition {
-    fn from(r: NutritionF64Row) -> Self {
-        Self {
-            total_calories_kcal: r.total_calories_kcal,
-            protein_g: r.protein_g,
-            fat_g: r.fat_g,
-            carbs_g: r.carbs_g,
-            sodium_mg: r.sodium_mg,
-            sugar_g: r.sugar_g,
-            fiber_g: r.fiber_g,
-            micros: r.micros,
-            ai_raw: r.ai_raw,
-            global_score: r.global_score,
-            created_at: r.created_at,
-        }
-    }
-}
-
+/// Create a new meal inside a transaction.
 pub async fn create_meal_tx(
     tx: &mut PgConnection,
     user_id: Uuid,
 ) -> anyhow::Result<(Uuid, OffsetDateTime)> {
     #[derive(sqlx::FromRow)]
-    struct InsertRow { id: Uuid, created_at: OffsetDateTime }
+    struct InsertRow {
+        id: Uuid,
+        created_at: OffsetDateTime,
+    }
 
-    let rec = sqlx::query_as::<_, InsertRow>(r#"
+    let rec = sqlx::query_as::<_, InsertRow>(
+        r#"
         INSERT INTO meals (user_id)
         VALUES ($1)
         RETURNING id, created_at
-    "#)
+        "#,
+    )
         .bind(user_id)
         .fetch_one(tx.as_mut())
         .await
@@ -81,6 +34,7 @@ pub async fn create_meal_tx(
     Ok((rec.id, rec.created_at))
 }
 
+/// Update meal title and notes.
 pub async fn update_meal_full(
     db: &PgPool,
     user_id: Uuid,
@@ -108,6 +62,7 @@ pub async fn update_meal_full(
     Ok(())
 }
 
+/// Unlink a meal from its owner (soft delete).
 pub async fn unlink_meal_from_user(
     db: &PgPool,
     user_id: Uuid,
@@ -131,6 +86,7 @@ pub async fn unlink_meal_from_user(
     Ok(())
 }
 
+/// List user meals with preview photos.
 pub async fn list_meals(
     db: &PgPool,
     user_id: Uuid,
@@ -169,12 +125,13 @@ pub async fn list_meals(
         .collect())
 }
 
+/// Get full meal details including nutrition and photos.
 pub async fn get_meal_details(
     db: &PgPool,
     user_id: Uuid,
     meal_id: Uuid,
 ) -> anyhow::Result<MealDetails> {
-    // meal
+    // Load meal
     let m = sqlx::query_as::<_, MealRow>(
         r#"
         SELECT id, title, notes, created_at
@@ -188,10 +145,10 @@ pub async fn get_meal_details(
         .await
         .context("get meal")?;
 
-    // nutrition → приводим NUMERIC к DOUBLE PRECISION (f64)
-    let nutr = sqlx::query_as::<_, NutritionF64Row>(
+    // Load nutrition (NUMERIC -> DOUBLE PRECISION for f64).
+    let nutr: Option<MealNutrition> = sqlx::query_as::<_, MealNutrition>(
         r#"
-        SELECT meal_id,
+        SELECT
                (total_calories_kcal)::DOUBLE PRECISION AS total_calories_kcal,
                (protein_g)::DOUBLE PRECISION          AS protein_g,
                (fat_g)::DOUBLE PRECISION              AS fat_g,
@@ -199,7 +156,8 @@ pub async fn get_meal_details(
                (sodium_mg)::DOUBLE PRECISION          AS sodium_mg,
                (sugar_g)::DOUBLE PRECISION            AS sugar_g,
                (fiber_g)::DOUBLE PRECISION            AS fiber_g,
-               micros, ai_raw,
+               micros,
+               ai_raw,
                (global_score)::DOUBLE PRECISION       AS global_score,
                created_at
           FROM meal_nutrition
@@ -211,7 +169,7 @@ pub async fn get_meal_details(
         .await
         .context("get nutrition")?;
 
-    // photos
+    // Load photos
     let photos = sqlx::query_as::<_, PhotoKeyRow>(
         r#"
         SELECT s3_key
@@ -233,7 +191,7 @@ pub async fn get_meal_details(
         title: m.title,
         notes: m.notes,
         created_at: m.created_at,
-        nutrition: nutr.map(Into::into),
+        nutrition: nutr,
         images: photos,
     })
 }

@@ -4,9 +4,11 @@ use uuid::Uuid;
 
 use crate::photos::services::{upload_and_link_images, UploadItem};
 use crate::state::AppState;
-
 use super::dto::{CreatedMealRequest, CreatedMealResponse};
 
+// -------------------- Utils --------------------
+
+/// Validate and pair image bytes with their MIME types.
 fn normalize_images(req: &CreatedMealRequest) -> anyhow::Result<Vec<(Bytes, String)>> {
     anyhow::ensure!(!req.images.is_empty(), "no images provided");
 
@@ -24,6 +26,9 @@ fn normalize_images(req: &CreatedMealRequest) -> anyhow::Result<Vec<(Bytes, Stri
     Ok(out)
 }
 
+// -------------------- Core --------------------
+
+/// Create a new meal, upload its images, and link them in DB.
 pub async fn create_meal_with_images(
     st: &AppState,
     user_id: Uuid,
@@ -31,10 +36,12 @@ pub async fn create_meal_with_images(
 ) -> anyhow::Result<CreatedMealResponse> {
     let normalized = normalize_images(&req)?;
 
+    // Step 1: insert meal row
     let mut tx = st.db.begin().await.context("begin tx")?;
     let (meal_id, created_at) = crate::meals::repo::create_meal_tx(tx.as_mut(), user_id).await?;
     tx.commit().await.context("commit meal")?;
 
+    // Step 2: prepare and upload images
     let imgs: Vec<UploadItem<'_>> = normalized
         .iter()
         .map(|(body, ct)| UploadItem {
@@ -51,6 +58,8 @@ pub async fn create_meal_with_images(
     })
 }
 
+// -------------------- Tests --------------------
+
 #[cfg(test)]
 mod meals_tests {
     use super::*;
@@ -63,17 +72,13 @@ mod meals_tests {
                 ByteBuf::from(vec![1, 2, 3]),
                 ByteBuf::from(vec![4, 5, 6, 7]),
             ],
-            content_types: vec![], // не передали — должно стать image/jpeg
+            content_types: vec![],
         };
 
         let items = super::normalize_images(&req).expect("ok");
         assert_eq!(items.len(), 2);
-
-        // порядок и содержимое
         assert_eq!(items[0].0.len(), 3);
         assert_eq!(items[1].0.len(), 4);
-
-        // дефолтный content-type
         assert_eq!(items[0].1, "image/jpeg");
         assert_eq!(items[1].1, "image/jpeg");
     }

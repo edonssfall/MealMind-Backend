@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use axum::async_trait;
-use sqlx::PgPool;
 use crate::config::AppConfig;
 use crate::storage::{Storage, StorageClient};
+use axum::async_trait;
+use sqlx::PgPool;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -28,30 +28,39 @@ impl AppState {
                 &config.minio_access_key,
                 &config.minio_secret_key,
                 "us-east-1",
-            ).await?
+            )
+            .await?,
         ) as Arc<dyn StorageClient>;
 
-        Ok(Self { db, config, storage })
+        Ok(Self {
+            db,
+            config,
+            storage,
+        })
     }
 
-    pub fn from_parts(
-        db: PgPool,
-        config: Arc<AppConfig>,
-        storage: Arc<dyn StorageClient>,
-    ) -> Self {
-        Self { db, config, storage }
+    pub fn from_parts(db: PgPool, config: Arc<AppConfig>, storage: Arc<dyn StorageClient>) -> Self {
+        Self {
+            db,
+            config,
+            storage,
+        }
     }
 
     pub fn fake() -> Self {
-        use bytes::Bytes;
         use axum::async_trait;
+        use bytes::Bytes;
 
         #[derive(Clone)]
         struct FakeStorage;
         #[async_trait]
         impl StorageClient for FakeStorage {
-            async fn put_object(&self, _k: &str, _b: Bytes, _ct: &str) -> anyhow::Result<()> { Ok(()) }
-            async fn delete_object(&self, _k: &str) -> anyhow::Result<()> { Ok(()) }
+            async fn put_object(&self, _k: &str, _b: Bytes, _ct: &str) -> anyhow::Result<()> {
+                Ok(())
+            }
+            async fn delete_object(&self, _k: &str) -> anyhow::Result<()> {
+                Ok(())
+            }
             async fn presign_get(&self, k: &str, _s: u64) -> anyhow::Result<String> {
                 Ok(format!("https://fake.local/{}", k))
             }
@@ -64,8 +73,11 @@ impl AppState {
         let config = Arc::new(AppConfig {
             database_url: "postgres://postgres:postgres@localhost:5432/postgres".into(),
             jwt: crate::config::JwtConfig {
-                secret: "test".into(), issuer: "test".into(), audience: "test".into(),
-                ttl_minutes: 5, refresh_ttl_minutes: 60,
+                secret: "test".into(),
+                issuer: "test".into(),
+                audience: "test".into(),
+                ttl_minutes: 5,
+                refresh_ttl_minutes: 60,
             },
             minio_endpoint: "fake".into(),
             minio_bucket: "fake".into(),
@@ -74,6 +86,10 @@ impl AppState {
         });
 
         let storage = Arc::new(FakeStorage) as Arc<dyn StorageClient>;
-        Self { db, config, storage }
+        Self {
+            db,
+            config,
+            storage,
+        }
     }
 }

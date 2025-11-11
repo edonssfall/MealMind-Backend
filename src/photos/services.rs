@@ -5,11 +5,17 @@ use uuid::Uuid;
 use super::repo;
 use crate::state::AppState;
 
+// ---- Types ----
+
+/// Represents one uploaded image with body and MIME type.
 pub struct UploadItem<'a> {
     pub body: Bytes,
     pub content_type: &'a str,
 }
 
+// ---- Core ----
+
+/// Upload all provided images to storage and link them to a meal in DB.
 pub async fn upload_and_link_images(
     st: &AppState,
     meal_id: Uuid,
@@ -21,18 +27,23 @@ pub async fn upload_and_link_images(
         id: Uuid,
         key: String,
     }
+
+    // Upload all images
     let mut objs = Vec::with_capacity(images.len());
     for img in images {
         let id = Uuid::new_v4();
         let ext = ext_from_mime(img.content_type).unwrap_or("bin");
         let key = format!("meals/{}/{}.{}", meal_id, id, ext);
+
         st.storage
             .put_object(&key, img.body, img.content_type)
             .await
             .with_context(|| format!("put_object {}", key))?;
+
         objs.push(Obj { id, key });
     }
 
+    // Link images in DB
     let mut tx = st.db.begin().await.context("begin tx")?;
     for o in &objs {
         repo::insert_photo_tx(&mut tx, o.id, Some(meal_id), &o.key).await?;
@@ -42,6 +53,9 @@ pub async fn upload_and_link_images(
     Ok(objs.into_iter().map(|o| o.id).collect())
 }
 
+// ---- Presigned URLs ----
+
+/// Generate presigned URLs for multiple S3 keys.
 pub async fn presign_many(
     st: &AppState,
     keys: Vec<String>,
@@ -54,6 +68,18 @@ pub async fn presign_many(
     Ok(out)
 }
 
+/// Generate presigned URL for a single photo key.
+pub async fn presign_by_photo_id(st: &AppState, s3_key: String) -> anyhow::Result<String> {
+    const TTL_SECS: u64 = 30 * 60;
+    st.storage
+        .presign_get(&s3_key, TTL_SECS)
+        .await
+        .with_context(|| format!("presign url for s3_key {}", s3_key))
+}
+
+// ---- Utils ----
+
+/// Infer file extension from MIME type.
 fn ext_from_mime(ct: &str) -> Option<&'static str> {
     match ct {
         "image/jpeg" | "image/jpg" => Some("jpg"),
@@ -64,13 +90,7 @@ fn ext_from_mime(ct: &str) -> Option<&'static str> {
     }
 }
 
-pub async fn presign_by_photo_id(st: &AppState, s3_key: String) -> anyhow::Result<String> {
-    const TTL_SECS: u64 = 30 * 60;
-    st.storage
-        .presign_get(&s3_key, TTL_SECS)
-        .await
-        .with_context(|| format!("presign url for s3_key {}", s3_key))
-}
+// ---- Tests ----
 
 #[cfg(test)]
 mod photo_tests {

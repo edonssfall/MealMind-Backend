@@ -6,7 +6,7 @@
 
 #### Register
 
-`http://localhost:8080/auth/register`
+`http://localhost:8080/api/v1/auth/register`
 
 `{"email":"user@example.com","password":"password123"}`
 
@@ -24,13 +24,13 @@ Response:
 
 #### Login
 
-`http://localhost:8080/auth/login`
+`http://localhost:8080/api/v1/auth/login`
 
 `{"email":"user@example.com","password":"password123"}`
 
 #### Refresh Token
 
-`http://localhost:8080/auth/refresh`
+`http://localhost:8080/api/v1/auth/refresh`
 
 `{"refresh_token":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."}`
 
@@ -38,7 +38,7 @@ Response:
 
 #### Get Current User
 
-`http://localhost:8080/me`
+`http://localhost:8080/api/v1/me`
 
 `"Authorization: Bearer YOUR_ACCESS_TOKEN"`
 

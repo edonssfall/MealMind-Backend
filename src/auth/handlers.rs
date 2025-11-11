@@ -3,17 +3,19 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use tracing::{error, info, instrument, warn};
+use tracing::{info, instrument};
 
 use crate::{
     auth::{
         dto::{AuthResponse, LoginRequest, PublicUser, RefreshRequest, RegisterRequest},
-        repo::User,
-        services::{hash_password, is_valid_email, verify_password, AuthUser, JwtKeys},
+        repo_types::User,
+        services::{hash_password, is_valid_email, verify_password, JwtKeys},
+        extractors::AuthUser,
     },
     state::AppState,
 };
 
+/// Auth endpoints: register, login, refresh
 pub fn auth_routes() -> Router<AppState> {
     Router::new()
         .route("/auth/register", post(register))
@@ -21,6 +23,7 @@ pub fn auth_routes() -> Router<AppState> {
         .route("/auth/refresh", post(refresh))
 }
 
+/// Protected user endpoint
 pub fn me_routes() -> Router<AppState> {
     Router::new().route("/me", get(get_me))
 }
@@ -32,61 +35,37 @@ pub async fn register(
 ) -> Result<Json<AuthResponse>, (axum::http::StatusCode, String)> {
     payload.email = payload.email.trim().to_lowercase();
 
+    // Validate input
     if !is_valid_email(&payload.email) {
-        warn!(email = %payload.email, "invalid email");
         return Err((axum::http::StatusCode::BAD_REQUEST, "Invalid email".into()));
     }
-
     if payload.password.len() < 8 {
-        warn!("password too short");
-        return Err((
-            axum::http::StatusCode::BAD_REQUEST,
-            "Password too short".into(),
-        ));
+        return Err((axum::http::StatusCode::BAD_REQUEST, "Password too short".into()));
     }
 
-    // Ensure email is not taken
+    // Check if email already exists
     if let Ok(Some(_)) = User::find_by_email(&state.db, &payload.email).await {
-        warn!(email = %payload.email, "email already registered");
-        return Err((
-            axum::http::StatusCode::CONFLICT,
-            "Email already registered".into(),
-        ));
+        return Err((axum::http::StatusCode::CONFLICT, "Email already registered".into()));
     }
 
-    let hash = match hash_password(&payload.password) {
-        Ok(h) => h,
-        Err(e) => {
-            error!(error = %e, "hash_password failed");
-            return Err((axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
-        }
-    };
+    // Hash and store user
+    let hash = hash_password(&payload.password)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let user = User::create(&state.db, &payload.email, &hash)
+        .await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let user = match User::create(&state.db, &payload.email, &hash).await {
-        Ok(u) => u,
-        Err(e) => {
-            error!(error = %e, "create user failed");
-            return Err((axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
-        }
-    };
-
+    // Generate JWT pair
     let keys = JwtKeys::from_ref(&state);
-    let access_token = match keys.sign_access(user.id) {
-        Ok(t) => t,
-        Err(e) => {
-            error!(error = %e, "jwt sign access failed");
-            return Err((axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
-        }
-    };
-    let refresh_token = match keys.sign_refresh(user.id) {
-        Ok(t) => t,
-        Err(e) => {
-            error!(error = %e, "jwt sign refresh failed");
-            return Err((axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
-        }
-    };
+    let access_token = keys
+        .sign_access(user.id)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let refresh_token = keys
+        .sign_refresh(user.id)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     info!(user_id = %user.id, email = %user.email, "user registered");
+
     Ok(Json(AuthResponse {
         access_token,
         refresh_token,
@@ -104,59 +83,30 @@ pub async fn login(
 ) -> Result<Json<AuthResponse>, (axum::http::StatusCode, String)> {
     payload.email = payload.email.trim().to_lowercase();
 
-    if !is_valid_email(&payload.email) {
-        warn!(email = %payload.email, "invalid email");
-        return Err((axum::http::StatusCode::BAD_REQUEST, "Invalid email".into()));
-    }
-
+    // Check user exists
     let user = match User::find_by_email(&state.db, &payload.email).await {
         Ok(Some(u)) => u,
-        Ok(None) => {
-            warn!(email = %payload.email, "login unknown email");
-            return Err((
-                axum::http::StatusCode::UNAUTHORIZED,
-                "Invalid credentials".into(),
-            ));
-        }
-        Err(e) => {
-            error!(error = %e, "find_by_email failed");
-            return Err((axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
-        }
+        _ => return Err((axum::http::StatusCode::UNAUTHORIZED, "Invalid credentials".into())),
     };
 
-    let ok = match verify_password(&payload.password, &user.password_hash) {
-        Ok(v) => v,
-        Err(e) => {
-            error!(error = %e, "verify_password failed");
-            return Err((axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
-        }
-    };
-
+    // Verify password
+    let ok = verify_password(&payload.password, &user.password_hash)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     if !ok {
-        warn!(email = %payload.email, user_id = %user.id, "login invalid password");
-        return Err((
-            axum::http::StatusCode::UNAUTHORIZED,
-            "Invalid credentials".into(),
-        ));
+        return Err((axum::http::StatusCode::UNAUTHORIZED, "Invalid credentials".into()));
     }
 
+    // Generate JWT pair
     let keys = JwtKeys::from_ref(&state);
-    let access_token = match keys.sign_access(user.id) {
-        Ok(t) => t,
-        Err(e) => {
-            error!(error = %e, "jwt sign access failed");
-            return Err((axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
-        }
-    };
-    let refresh_token = match keys.sign_refresh(user.id) {
-        Ok(t) => t,
-        Err(e) => {
-            error!(error = %e, "jwt sign refresh failed");
-            return Err((axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
-        }
-    };
+    let access_token = keys
+        .sign_access(user.id)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let refresh_token = keys
+        .sign_refresh(user.id)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     info!(user_id = %user.id, email = %user.email, "user logged in");
+
     Ok(Json(AuthResponse {
         access_token,
         refresh_token,
@@ -175,9 +125,9 @@ pub async fn refresh(
     let keys = JwtKeys::from_ref(&state);
     let claims = keys
         .verify_refresh(&payload.refresh_token)
-        .map_err(|e| (axum::http::StatusCode::UNAUTHORIZED, format!("{}", e)))?;
+        .map_err(|_| (axum::http::StatusCode::UNAUTHORIZED, "Invalid or expired token".into()))?;
 
-    // Issue new pair
+    // New tokens
     let access_token = keys
         .sign_access(claims.sub)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -185,19 +135,15 @@ pub async fn refresh(
         .sign_refresh(claims.sub)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // Load public user
+    // Get user
     let user = sqlx::query_as::<_, User>(
         r#"SELECT id, email, password_hash, created_at FROM users WHERE id = $1"#,
     )
-    .bind(claims.sub)
-    .fetch_one(&state.db)
-    .await
-    .map_err(|_| {
-        (
-            axum::http::StatusCode::UNAUTHORIZED,
-            "User not found".into(),
-        )
-    })?;
+        .bind(claims.sub)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| (axum::http::StatusCode::UNAUTHORIZED, "User not found".into()))?;
+
     Ok(Json(AuthResponse {
         access_token,
         refresh_token,
@@ -216,16 +162,10 @@ pub async fn get_me(
     let user = sqlx::query_as::<_, User>(
         r#"SELECT id, email, password_hash, created_at FROM users WHERE id = $1"#,
     )
-    .bind(user_id)
-    .fetch_one(&state.db)
-    .await
-    .map_err(|e| {
-        error!(error = %e, user_id = %user_id, "user not found");
-        (
-            axum::http::StatusCode::UNAUTHORIZED,
-            "User not found".into(),
-        )
-    })?;
+        .bind(user_id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| (axum::http::StatusCode::UNAUTHORIZED, "User not found".into()))?;
 
     Ok(Json(PublicUser {
         id: user.id,
@@ -233,6 +173,7 @@ pub async fn get_me(
     }))
 }
 
+// -------------------- Tests --------------------
 
 #[cfg(test)]
 mod me_tests {
@@ -244,7 +185,6 @@ mod me_tests {
             id: uuid::Uuid::new_v4(),
             email: "test@example.com".to_string(),
         };
-
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("test@example.com"));
         assert!(json.contains("id"));
