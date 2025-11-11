@@ -3,18 +3,13 @@ use crate::config::JwtConfig;
 use crate::state::AppState;
 
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use axum::{
-    async_trait,
-    extract::{FromRef, FromRequestParts},
-    http::{request::Parts, StatusCode},
-};
+use axum::extract::FromRef;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use lazy_static::lazy_static;
 use rand::rngs::OsRng;
 use regex::Regex;
 use std::time::Duration;
 use time::{Duration as TimeDuration, OffsetDateTime};
-use tracing::{debug, warn};
 use uuid::Uuid;
 
 // -------------------- Utils --------------------
@@ -88,7 +83,6 @@ impl JwtKeys {
         // Be explicit about HS256 to avoid silent alg mismatches
         let header = Header::new(Algorithm::HS256);
         let token = encode(&header, &claims, &self.encoding)?;
-        debug!(user_id = %user_id, kind = ?kind, "jwt signed");
         Ok(token)
     }
 
@@ -115,7 +109,6 @@ impl JwtKeys {
         let data = decode::<Claims>(token, &self.decoding, &validation)
             .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
-        debug!(user_id = %data.claims.sub, kind = ?data.claims.kind, "jwt verified");
         Ok(data.claims)
     }
 
@@ -126,62 +119,6 @@ impl JwtKeys {
             anyhow::bail!("not a refresh token");
         }
         Ok(claims)
-    }
-}
-
-// -------------------- Auth extractor --------------------
-
-pub struct AuthUser(pub Uuid);
-
-#[async_trait]
-impl<S> FromRequestParts<S> for AuthUser
-where
-    S: Send + Sync,
-    JwtKeys: FromRef<S>,
-{
-    type Rejection = (StatusCode, String);
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        // Pull JWT verification keys from state
-        let keys = JwtKeys::from_ref(state);
-
-        // Read and normalize Authorization header
-        let auth_header = parts
-            .headers
-            .get(axum::http::header::AUTHORIZATION)
-            .and_then(|v| v.to_str().ok())
-            .ok_or((
-                StatusCode::UNAUTHORIZED,
-                "missing Authorization header".to_string(),
-            ))?;
-
-        // Be tolerant to casing and extra whitespace
-        let auth_trimmed = auth_header.trim();
-        let token = auth_trimmed
-            .strip_prefix("Bearer ")
-            .or_else(|| auth_trimmed.strip_prefix("bearer "))
-            .ok_or((StatusCode::UNAUTHORIZED, "invalid auth scheme".to_string()))?;
-
-        // Verify token and ensure it is an access token
-        let claims = match keys.verify(token) {
-            Ok(c) => c,
-            Err(e) => {
-                warn!(error = %e, "token verification failed");
-                return Err((
-                    StatusCode::UNAUTHORIZED,
-                    "invalid or expired token".to_string(),
-                ));
-            }
-        };
-
-        if claims.kind != TokenKind::Access {
-            return Err((
-                StatusCode::UNAUTHORIZED,
-                "access token required".to_string(),
-            ));
-        }
-
-        Ok(AuthUser(claims.sub))
     }
 }
 

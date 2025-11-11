@@ -3,46 +3,60 @@ use axum::{
     extract::FromRequestParts,
     http::{request::Parts, StatusCode},
 };
-use jsonwebtoken::{decode, DecodingKey, Validation};
+use axum::extract::FromRef;
 use uuid::Uuid;
-
-use super::claims::Claims;
-use crate::state::AppState;
+use crate::auth::dto::{JwtKeys, TokenKind};
 
 /// Extracts and validates JWT, returning the user ID.
 pub struct AuthUser(pub Uuid);
 
 #[async_trait]
-impl FromRequestParts<AppState> for AuthUser {
+impl<S> FromRequestParts<S> for AuthUser
+where
+    S: Send + Sync,
+    JwtKeys: FromRef<S>,
+{
     type Rejection = (StatusCode, String);
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &AppState,
-    ) -> Result<Self, Self::Rejection> {
-        // Read Authorization header
-        let auth = parts
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        // Pull JWT verification keys from state
+        let keys = JwtKeys::from_ref(state);
+
+        // Read and normalize Authorization header
+        let auth_header = parts
             .headers
             .get(axum::http::header::AUTHORIZATION)
-            .and_then(|h| h.to_str().ok())
-            .ok_or((StatusCode::UNAUTHORIZED, "missing Authorization header".into()))?;
+            .and_then(|v| v.to_str().ok())
+            .ok_or((
+                StatusCode::UNAUTHORIZED,
+                "missing Authorization header".to_string(),
+            ))?;
 
-        // Expect "Bearer <token>"
-        let token = auth
+        // Be tolerant to casing and extra whitespace
+        let auth_trimmed = auth_header.trim();
+        let token = auth_trimmed
             .strip_prefix("Bearer ")
-            .or_else(|| auth.strip_prefix("bearer "))
-            .ok_or((StatusCode::UNAUTHORIZED, "invalid auth scheme".into()))?;
+            .or_else(|| auth_trimmed.strip_prefix("bearer "))
+            .ok_or((StatusCode::UNAUTHORIZED, "invalid auth scheme".to_string()))?;
 
-        // Validate JWT
-        let cfg = &state.config.jwt;
-        let mut validation = Validation::default();
-        validation.set_audience(std::slice::from_ref(&cfg.audience));
-        validation.set_issuer(std::slice::from_ref(&cfg.issuer));
-        let decoding = DecodingKey::from_secret(cfg.secret.as_bytes());
+        // Verify token and ensure it is an access token
+        let claims = match keys.verify(token) {
+            Ok(c) => c,
+            Err(_) => {
+                return Err((
+                    StatusCode::UNAUTHORIZED,
+                    "invalid or expired token".to_string(),
+                ));
+            }
+        };
 
-        let data = decode::<Claims>(token, &decoding, &validation)
-            .map_err(|_| (StatusCode::UNAUTHORIZED, "invalid or expired token".into()))?;
+        if claims.kind != TokenKind::Access {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                "access token required".to_string(),
+            ));
+        }
 
-        Ok(AuthUser(data.claims.sub))
+        Ok(AuthUser(claims.sub))
     }
 }
